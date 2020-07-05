@@ -32,42 +32,64 @@ type Flag interface {
 	IsRequired() bool
 }
 
-// ParseFlags takes a list of flags and applies them to the provided pflag.Flagset
-// before parsing the flagset. Environment variables will be used to set flag values
-// if they are defined, and the flag was not passed on the commandline.
-func ParseFlags(fs *pflag.FlagSet, flags []Flag, args []string) error {
-	for _, f := range flags {
-		f.Apply(fs)
-	}
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
+// FlagResolver is the interface implemented by custom flag resolvers.
+type FlagResolver interface {
+	Resolve(Flag) (string, bool)
+}
 
-	var missingFlags []string
+// EnvVarResolver implements FlagResolver by resolving variables from the environment.
+type EnvVarResolver struct{}
+
+// Resolve implements FlagResolver.
+func (*EnvVarResolver) Resolve(flag Flag) (string, bool) {
+	for _, k := range flag.GetEnvVar() {
+		v, found := os.LookupEnv(strings.TrimPrefix(k, "$"))
+		if found {
+			return v, found
+		}
+	}
+	return "", false
+}
+
+// ResolveMissingFlags iterates over all missing flags in the given pflag.FlagSet and applies each FlagResolver in turn
+// until the the flag is resolved. An error is returned if we are unable to set the flag to the resolved value, or if
+// a required Flag has missing values after applying all resolvers.
+func ResolveMissingFlags(fs *pflag.FlagSet, flags []Flag, resolvers ...FlagResolver) error {
+	var (
+		missingFlags []string
+		resolverErr  error
+	)
 
 	fs.VisitAll(func(f *pflag.Flag) {
 		if f.Changed {
 			return // Flag has been set via commandline
 		}
 		for _, flag := range flags {
-			if flag.GetName() == f.Name {
-				var (
-					value string
-					found bool
-				)
-				for _, k := range flag.GetEnvVar() {
-					value, found = os.LookupEnv(strings.TrimPrefix(k, "$"))
-					if found {
-						f.Value.Set(value)
-						break // Flag was set via environment
+			if flag.GetName() != f.Name {
+				continue
+			}
+			var (
+				found bool
+				value string
+			)
+			for _, resolver := range resolvers {
+				value, found = resolver.Resolve(flag)
+				if found {
+					err := f.Value.Set(value)
+					if err != nil {
+						resolverErr = err
 					}
+					break // Flag was resolved
 				}
-				if !found && flag.IsRequired() {
-					missingFlags = append(missingFlags, flag.GetName())
-				}
+			}
+			if !found && flag.IsRequired() {
+				missingFlags = append(missingFlags, flag.GetName())
 			}
 		}
 	})
+	if resolverErr != nil {
+		return resolverErr
+	}
 	if len(missingFlags) > 0 {
 		return fmt.Errorf("missing required flags %v", missingFlags)
 	}

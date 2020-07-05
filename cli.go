@@ -34,6 +34,7 @@ type Options struct {
 	Writer    io.Writer
 	ErrWriter io.Writer
 	UsageFunc func(*Command) string
+	Resolvers []FlagResolver
 }
 
 // complete passes default values to the options that are unset.
@@ -50,6 +51,9 @@ func (opts *Options) complete() {
 	if opts.UsageFunc == nil {
 		opts.UsageFunc = defaultUsageFunc
 	}
+	if opts.Resolvers == nil {
+		opts.Resolvers = []FlagResolver{&EnvVarResolver{}}
+	}
 }
 
 // Command ...
@@ -62,12 +66,13 @@ type Command struct {
 	Opts        *Options
 
 	fs     *pflag.FlagSet
-	parsed *Command
+	gfs    *pflag.FlagSet
 	parent *Command
+	parsed *Command
 }
 
-// Build ...
-func (c *Command) Build() error {
+// Setup ...
+func (c *Command) Setup() (err error) {
 	if c.Exec == nil && len(c.Subcommands) == 0 {
 		return &ErrMisconfigured{cmd: c, msg: "must define either exec or subcommands"}
 	}
@@ -78,6 +83,16 @@ func (c *Command) Build() error {
 		c.Opts = &Options{}
 	}
 	c.Opts.complete()
+
+	// Reset flagset each time setup is called.
+	c.fs = pflag.NewFlagSet(c.name(), pflag.ContinueOnError)
+	c.fs.Usage = func() {}
+
+	// Apply flags to flagset.
+	for _, flag := range c.Flags {
+		flag.Apply(c.fs)
+	}
+
 	for _, subcommand := range c.Subcommands {
 		if subcommand.parent != nil {
 			continue
@@ -90,47 +105,64 @@ func (c *Command) Build() error {
 }
 
 // Parse ...
-func (c *Command) Parse(args []string) error {
-	if err := c.Build(); err != nil {
+func (c *Command) Parse(args []string) (parseError error) {
+	if err := c.Setup(); err != nil {
+		return err
+	}
+	if err := c.fs.Parse(args); err != nil {
+		switch {
+		case errors.Is(err, pflag.ErrHelp):
+			// Wait with returning error until we have checked arguments to see if --help was specified for a subcommand.
+			parseError = err
+		case isUnknownFlagErr(err):
+			// Unknown flags might belong to a subcommand so we wait to return. We should remove arguments that have
+			// been successfully parsed, which can be done somewhat hackily by parsing the name of the flag from the
+			// error message.
+			if i := strings.Index(err.Error(), "-"); i > 0 {
+				failedArg := err.Error()[i:]
+				for ii, arg := range args {
+					if arg == failedArg {
+						args = args[(ii - 1):]
+						break
+					}
+				}
+			}
+			parseError = err
+		default:
+			return err
+		}
+	}
+	if err := ResolveMissingFlags(c.fs, c.Flags, c.Opts.Resolvers...); err != nil {
 		return err
 	}
 
 	// Check if the first argument was a subcommand
-	if len(args) > 0 {
+	if c.fs.NArg() > 0 {
 		for _, subcommand := range c.Subcommands {
-			if subcommand.name() == args[0] {
+			if subcommand.name() == c.fs.Arg(0) {
 				c.parsed = subcommand
 				return subcommand.Parse(args[1:])
 			}
 		}
 	}
-
-	c.fs = pflag.NewFlagSet(c.name(), pflag.ContinueOnError)
-
-	// Supress usage since pflag always prints help message if -h
-	// or --help is parsed. We need to parse subcommands first.
-	c.fs.Usage = func() {}
-
-	if err := ParseFlags(c.fs, c.Flags, args); err != nil {
-		if errors.Is(err, pflag.ErrHelp) {
-			fmt.Fprintln(c.Opts.ErrWriter, c.Opts.UsageFunc(c))
-		}
-		return err
-	}
-
 	c.parsed = c
-	return nil
+	return parseError
 }
 
 // Execute ...
 func (c *Command) Execute(args []string) error {
 	if err := c.Parse(args); err != nil {
 		if errors.Is(err, pflag.ErrHelp) {
+			fmt.Fprintln(c.parsed.Opts.ErrWriter, c.parsed.Opts.UsageFunc(c.parsed))
 			return nil
 		}
 		return fmt.Errorf("parsing command: %w", err)
 	}
-	return c.parsed.Exec(&Context{c.parsed.fs})
+	flags, err := c.parsed.combinedFlags()
+	if err != nil {
+		return err
+	}
+	return c.parsed.Exec(&Context{flags})
 }
 
 // name returns the name of the command.
@@ -146,7 +178,7 @@ func (c *Command) usage() string {
 	return c.Usage
 }
 
-// parentPath recurses up the command tree to construct the complete command path of the parent
+// parentPath recurses up the command tree to construct the complete command path of the parent.
 func (c *Command) parentPath() string {
 	if c.parent != nil {
 		if path := c.parent.parentPath(); path != "" {
@@ -158,13 +190,41 @@ func (c *Command) parentPath() string {
 }
 
 // setParent configures the parent for the current command.
-func (c *Command) setParent(parent *Command) error {
+func (c *Command) setParent(parent *Command) (err error) {
 	c.parent = parent
 	if c.Opts == nil {
 		c.Opts = c.parent.Opts
 	}
-	c.Flags = append(c.Flags, c.parent.Flags...)
+	c.gfs, err = parent.combinedFlags()
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+// combinedFlags returns a pflag.FlagSet containing both local and global flags for the command.
+func (c *Command) combinedFlags() (*pflag.FlagSet, error) {
+	if c.gfs == nil {
+		return c.fs, nil
+	}
+
+	var redefined []string
+	c.gfs.VisitAll(func(f *pflag.Flag) {
+		if c.fs.Lookup(f.Name) != nil || c.fs.ShorthandLookup(f.Shorthand) != nil {
+			redefined = append(redefined, f.Name)
+			return
+		}
+		c.fs.AddFlag(f)
+	})
+	if len(redefined) > 0 {
+		return nil, &ErrMisconfigured{cmd: c, msg: fmt.Sprintf("global flags redefined locally: %v", redefined)}
+	}
+	return c.fs, nil
+}
+
+// isUnknownFlagErr returns true if the given pflag.Parse error is due to an unknown flag or shorthand.
+func isUnknownFlagErr(e error) bool {
+	return strings.HasPrefix(e.Error(), "unknown flag") || strings.HasPrefix(e.Error(), "unknown shorthand flag")
 }
 
 // defaultUsageFunc is the default function used to produce the usage string that is printed when
@@ -182,8 +242,12 @@ func defaultUsageFunc(c *Command) string {
 		tw.Flush()
 	}
 
-	if len(c.Flags) > 0 {
-		fmt.Fprintf(&b, "\nFlags:\n%s\n", c.fs.FlagUsages())
+	if c.fs.HasAvailableFlags() {
+		fmt.Fprintf(&b, "\nFlags:\n%s", c.fs.FlagUsages())
+	}
+
+	if c.gfs != nil && c.gfs.HasAvailableFlags() {
+		fmt.Fprintf(&b, "\nGlobal Flags:\n%s", c.gfs.FlagUsages())
 	}
 
 	return b.String()

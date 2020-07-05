@@ -112,8 +112,10 @@ func Example_subcommands() {
 	// Usage: printer repeat <arg>
 	//
 	// Flags:
-	//   -d, --debug       Enable debug logging
 	//   -t, --times int   Number of times to print the argument [$PRINTER_REPEAT_TIMES] (default 3)
+	//
+	// Global Flags:
+	//   -d, --debug   Enable debug logging
 }
 
 func eq(t *testing.T, expected, got interface{}) {
