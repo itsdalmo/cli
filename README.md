@@ -8,6 +8,7 @@ A minimal package for building CLIs in Go, built around [spf13/pflag](https://gi
 [![code quality](https://goreportcard.com/badge/github.com/itsdalmo/cli?style=flat-square)](https://goreportcard.com/report/github.com/itsdalmo/cli)
 
 #### TODO
-- [ ] Add validation for redeclared flag names (and shorthand) in subcommands (instead of pflag panic).
-- [ ] Print global flags in a separate section under usage.
+- [x] Add validation for redeclared flag names (and shorthand) in subcommands (instead of pflag panic).
+- [x] Print global flags in a separate section under usage.
 - [ ] Generate more flag types :D
+- [ ] Validate arguments based on Usage? E.g. `command <in> <out>` could validate that two positional arguments exist during parse?

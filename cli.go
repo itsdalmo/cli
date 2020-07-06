@@ -109,11 +109,9 @@ func (c *Command) Parse(args []string) (parseError error) {
 	if err := c.Setup(); err != nil {
 		return err
 	}
+	var helpRequested bool
 	if err := c.fs.Parse(args); err != nil {
 		switch {
-		case errors.Is(err, pflag.ErrHelp):
-			// Wait with returning error until we have checked arguments to see if --help was specified for a subcommand.
-			parseError = err
 		case isUnknownFlagErr(err):
 			// Unknown flags might belong to a subcommand so we wait to return. We should remove arguments that have
 			// been successfully parsed, which can be done somewhat hackily by parsing the name of the flag from the
@@ -128,23 +126,30 @@ func (c *Command) Parse(args []string) (parseError error) {
 				}
 			}
 			parseError = err
+		case errors.Is(err, pflag.ErrHelp):
+			// Wait with returning error until we have checked arguments to see if --help was specified for a subcommand.
+			parseError, helpRequested = err, true
 		default:
 			return err
 		}
 	}
+
 	if err := ResolveMissingFlags(c.fs, c.Flags, c.Opts.Resolvers...); err != nil {
 		return err
 	}
 
-	// Check if the first argument was a subcommand
-	if c.fs.NArg() > 0 {
+	if len(c.Subcommands) > 0 {
 		for _, subcommand := range c.Subcommands {
 			if subcommand.name() == c.fs.Arg(0) {
 				c.parsed = subcommand
 				return subcommand.Parse(args[1:])
 			}
 		}
+		if !helpRequested {
+			parseError = errors.New("no subcommand specified. See --help")
+		}
 	}
+
 	c.parsed = c
 	return parseError
 }
