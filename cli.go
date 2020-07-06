@@ -77,7 +77,7 @@ func (c *Command) Setup() (err error) {
 		return &ErrMisconfigured{cmd: c, msg: "must define either exec or subcommands"}
 	}
 	if c.Exec != nil && len(c.Subcommands) > 0 {
-		return &ErrMisconfigured{cmd: c, msg: "cannot define both exec and subommands"}
+		return &ErrMisconfigured{cmd: c, msg: "cannot define both exec and subcommands"}
 	}
 	if c.Opts == nil {
 		c.Opts = &Options{}
