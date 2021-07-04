@@ -73,6 +73,9 @@ type Command struct {
 
 // Setup ...
 func (c *Command) Setup() (err error) {
+	if c.Usage == "" {
+		return &ErrMisconfigured{cmd: c, msg: "usage must be defined"}
+	}
 	if c.Exec == nil && len(c.Subcommands) == 0 {
 		return &ErrMisconfigured{cmd: c, msg: "must define either exec or subcommands"}
 	}
@@ -236,7 +239,12 @@ func isUnknownFlagErr(e error) bool {
 // -h or --help is specified by the user. It is the default value for UsageFunc in Options.
 func defaultUsageFunc(c *Command) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Usage: %s\n", c.usage())
+
+	if c.Help != "" {
+		fmt.Fprint(&b, c.Help, "\n\n")
+	}
+
+	fmt.Fprintf(&b, "Usage:\n  %s\n", c.usage())
 
 	if len(c.Subcommands) > 0 {
 		fmt.Fprint(&b, "\nAvailable Commands:\n")

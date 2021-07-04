@@ -23,7 +23,9 @@ func Example_minimal() {
 		panic(err)
 	}
 	// Output:
-	// Usage: printer [arg...]
+	//
+	// Usage:
+	//   printer [arg...]
 }
 
 func Example_basic() {
@@ -53,7 +55,9 @@ func Example_basic() {
 		panic(err)
 	}
 	// Output:
-	// Usage: printer [flags] [arg...]
+	//
+	// Usage:
+	//   printer [flags] [arg...]
 	//
 	// Flags:
 	//   -d, --debug   Enable debug logging
@@ -87,14 +91,20 @@ func Example_subcommands() {
 						Value:  3,
 						EnvVar: []string{"PRINTER_REPEAT_TIMES"},
 					},
+					&cli.StringFlag{
+						Name:  "delimiter",
+						Usage: "Delimiter to use when printing",
+						Value: "\n",
+					},
 				},
 				Exec: func(c *cli.Context) error {
 					times, err := c.GetInt("times")
 					if err != nil {
 						return err
 					}
+					delimiter, err := c.GetString("delimiter")
 					for i := 0; i < times; i++ {
-						fmt.Println(c.Arg(0))
+						fmt.Print(c.Arg(0), delimiter)
 					}
 					return nil
 				},
@@ -109,10 +119,15 @@ func Example_subcommands() {
 		panic(err)
 	}
 	// Output:
-	// Usage: printer repeat <arg>
+	//
+	// Repeatedly print the given argument
+	//
+	// Usage:
+	//   printer repeat <arg>
 	//
 	// Flags:
-	//   -t, --times int   Number of times to print the argument [$PRINTER_REPEAT_TIMES] (default 3)
+	//       --delimiter string   Delimiter to use when printing (default "\n")
+	//   -t, --times int          Number of times to print the argument [$PRINTER_REPEAT_TIMES] (default 3)
 	//
 	// Global Flags:
 	//   -d, --debug   Enable debug logging
