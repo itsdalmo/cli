@@ -100,14 +100,15 @@ func usageWithEnvVar(usage string, vars []string) string {
 	if len(vars) == 0 {
 		return usage
 	}
-	varPrefix, varSuffix := "$", ""
+	prefix, suffix := "$", ""
 	if runtime.GOOS == "windows" {
-		varPrefix, varSuffix = "%", "%"
+		prefix, suffix = "%", "%"
 	}
-	for i, v := range vars {
-		vars[i] = varPrefix + v + varSuffix
+	var env []string
+	for _, v := range vars {
+		env = append(env, prefix+v+suffix)
 	}
-	return fmt.Sprintf("%s [%s]", usage, strings.Join(vars, ", "))
+	return fmt.Sprintf("%s [%s]", usage, strings.Join(env, ", "))
 }
 
 func splitFlagName(name string) (longName string, shortName string) {

@@ -15,7 +15,7 @@ func Example_minimal() {
 		Exec: func(c *cli.Context) error {
 			return nil
 		},
-		Opts: &cli.Options{
+		Opts: cli.Options{
 			ErrWriter: os.Stdout,
 		},
 	}
@@ -47,7 +47,7 @@ func Example_basic() {
 			}
 			return nil
 		},
-		Opts: &cli.Options{
+		Opts: cli.Options{
 			ErrWriter: os.Stdout,
 		},
 	}
@@ -110,7 +110,7 @@ func Example_subcommands() {
 				},
 			},
 		},
-		Opts: &cli.Options{
+		Opts: cli.Options{
 			ErrWriter: os.Stdout,
 		},
 	}
@@ -131,6 +131,61 @@ func Example_subcommands() {
 	//
 	// Global Flags:
 	//   -d, --debug   Enable debug logging
+}
+
+func Test_Subcommands_InheritGlobalFlags(t *testing.T) {
+	c := cli.Command{
+		Usage: "root [flags] [command]",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "debug, d",
+				Usage: "Enable debug logging",
+			},
+		},
+		Subcommands: []*cli.Command{
+			{
+				Usage: "subcommand [flags]",
+				Exec: func(c *cli.Context) error {
+					debug, err := c.GetBool("debug")
+					eq(t, nil, err)
+					eq(t, true, debug)
+					eq(t, 0, len(c.Args()))
+					return nil
+				},
+			},
+		},
+	}
+
+	if err := c.Execute([]string{"subcommand", "--debug"}); err != nil {
+		t.Errorf("execute error: %s", err)
+	}
+}
+
+func Test_Subcommands_IgnoresGlobalFlagOrder(t *testing.T) {
+	c := cli.Command{
+		Usage: "root [flags] [command]",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "debug, d",
+				Usage: "Enable debug logging",
+			},
+		},
+		Subcommands: []*cli.Command{
+			{
+				Usage: "subcommand [flags]",
+				Exec: func(c *cli.Context) error {
+					debug, err := c.GetBool("debug")
+					eq(t, nil, err)
+					eq(t, true, debug)
+					return nil
+				},
+			},
+		},
+	}
+
+	if err := c.Execute([]string{"--debug", "subcommand"}); err != nil {
+		t.Errorf("execute error: %s", err)
+	}
 }
 
 func eq(t *testing.T, expected, got interface{}) {
