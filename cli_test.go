@@ -15,7 +15,7 @@ func Example_minimal() {
 		Exec: func(c *cli.Context) error {
 			return nil
 		},
-		Opts: &cli.Options{
+		Opts: cli.Options{
 			ErrWriter: os.Stdout,
 		},
 	}
@@ -23,7 +23,9 @@ func Example_minimal() {
 		panic(err)
 	}
 	// Output:
-	// Usage: printer [arg...]
+	//
+	// Usage:
+	//   printer [arg...]
 }
 
 func Example_basic() {
@@ -45,7 +47,7 @@ func Example_basic() {
 			}
 			return nil
 		},
-		Opts: &cli.Options{
+		Opts: cli.Options{
 			ErrWriter: os.Stdout,
 		},
 	}
@@ -53,7 +55,9 @@ func Example_basic() {
 		panic(err)
 	}
 	// Output:
-	// Usage: printer [flags] [arg...]
+	//
+	// Usage:
+	//   printer [flags] [arg...]
 	//
 	// Flags:
 	//   -d, --debug   Enable debug logging
@@ -87,20 +91,26 @@ func Example_subcommands() {
 						Value:  3,
 						EnvVar: []string{"PRINTER_REPEAT_TIMES"},
 					},
+					&cli.StringFlag{
+						Name:  "delimiter",
+						Usage: "Delimiter to use when printing",
+						Value: "\n",
+					},
 				},
 				Exec: func(c *cli.Context) error {
 					times, err := c.GetInt("times")
 					if err != nil {
 						return err
 					}
+					delimiter, err := c.GetString("delimiter")
 					for i := 0; i < times; i++ {
-						fmt.Println(c.Arg(0))
+						fmt.Print(c.Arg(0), delimiter)
 					}
 					return nil
 				},
 			},
 		},
-		Opts: &cli.Options{
+		Opts: cli.Options{
 			ErrWriter: os.Stdout,
 		},
 	}
@@ -109,13 +119,73 @@ func Example_subcommands() {
 		panic(err)
 	}
 	// Output:
-	// Usage: printer repeat <arg>
+	//
+	// Repeatedly print the given argument
+	//
+	// Usage:
+	//   printer repeat <arg>
 	//
 	// Flags:
-	//   -t, --times int   Number of times to print the argument [$PRINTER_REPEAT_TIMES] (default 3)
+	//       --delimiter string   Delimiter to use when printing (default "\n")
+	//   -t, --times int          Number of times to print the argument [$PRINTER_REPEAT_TIMES] (default 3)
 	//
 	// Global Flags:
 	//   -d, --debug   Enable debug logging
+}
+
+func Test_Subcommands_InheritGlobalFlags(t *testing.T) {
+	c := cli.Command{
+		Usage: "root [flags] [command]",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "debug, d",
+				Usage: "Enable debug logging",
+			},
+		},
+		Subcommands: []*cli.Command{
+			{
+				Usage: "subcommand [flags]",
+				Exec: func(c *cli.Context) error {
+					debug, err := c.GetBool("debug")
+					eq(t, nil, err)
+					eq(t, true, debug)
+					eq(t, 0, len(c.Args()))
+					return nil
+				},
+			},
+		},
+	}
+
+	if err := c.Execute([]string{"subcommand", "--debug"}); err != nil {
+		t.Errorf("execute error: %s", err)
+	}
+}
+
+func Test_Subcommands_IgnoresGlobalFlagOrder(t *testing.T) {
+	c := cli.Command{
+		Usage: "root [flags] [command]",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "debug, d",
+				Usage: "Enable debug logging",
+			},
+		},
+		Subcommands: []*cli.Command{
+			{
+				Usage: "subcommand [flags]",
+				Exec: func(c *cli.Context) error {
+					debug, err := c.GetBool("debug")
+					eq(t, nil, err)
+					eq(t, true, debug)
+					return nil
+				},
+			},
+		},
+	}
+
+	if err := c.Execute([]string{"--debug", "subcommand"}); err != nil {
+		t.Errorf("execute error: %s", err)
+	}
 }
 
 func eq(t *testing.T, expected, got interface{}) {

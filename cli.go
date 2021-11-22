@@ -63,45 +63,57 @@ type Command struct {
 	Flags       []Flag
 	Exec        func(*Context) error
 	Subcommands []*Command
-	Opts        *Options
+	Opts        Options
 
 	fs     *pflag.FlagSet
-	gfs    *pflag.FlagSet
 	parent *Command
 	parsed *Command
 }
 
 // Setup ...
 func (c *Command) Setup() (err error) {
+	if c.Usage == "" {
+		return &ErrMisconfigured{cmd: c, msg: "usage must be defined"}
+	}
 	if c.Exec == nil && len(c.Subcommands) == 0 {
 		return &ErrMisconfigured{cmd: c, msg: "must define either exec or subcommands"}
 	}
 	if c.Exec != nil && len(c.Subcommands) > 0 {
 		return &ErrMisconfigured{cmd: c, msg: "cannot define both exec and subcommands"}
 	}
-	if c.Opts == nil {
-		c.Opts = &Options{}
-	}
 	c.Opts.complete()
 
-	// Reset flagset each time setup is called.
-	c.fs = pflag.NewFlagSet(c.name(), pflag.ContinueOnError)
-	c.fs.Usage = func() {}
-
-	// Apply flags to flagset.
-	for _, flag := range c.Flags {
-		flag.Apply(c.fs)
+	c.fs = newFS(c.LocalFlags())
+	if c.parent != nil {
+		c.fs.AddFlagSet(c.parent.fs)
 	}
 
 	for _, subcommand := range c.Subcommands {
-		if subcommand.parent != nil {
-			continue
-		}
 		if err := subcommand.setParent(c); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (c *Command) LocalFlags() []Flag {
+	return c.Flags
+}
+
+func (c *Command) GlobalFlags() []Flag {
+	var fs []Flag
+	if c.parent != nil {
+		fs = append(fs, c.parent.CombinedFlags()...)
+	}
+	return fs
+}
+
+func (c *Command) CombinedFlags() []Flag {
+	fs := c.LocalFlags()
+	if c.parent != nil {
+		fs = append(fs, c.parent.CombinedFlags()...)
+	}
+	return fs
 }
 
 // Parse ...
@@ -120,7 +132,7 @@ func (c *Command) Parse(args []string) (parseError error) {
 				failedArg := err.Error()[i:]
 				for ii, arg := range args {
 					if arg == failedArg {
-						args = args[(ii - 1):]
+						args = args[ii:]
 						break
 					}
 				}
@@ -163,11 +175,7 @@ func (c *Command) Execute(args []string) error {
 		}
 		return fmt.Errorf("parsing command: %w", err)
 	}
-	flags, err := c.parsed.combinedFlags()
-	if err != nil {
-		return err
-	}
-	return c.parsed.Exec(&Context{flags})
+	return c.parsed.Exec(&Context{c.parsed.fs})
 }
 
 // name returns the name of the command.
@@ -195,36 +203,19 @@ func (c *Command) parentPath() string {
 }
 
 // setParent configures the parent for the current command.
-func (c *Command) setParent(parent *Command) (err error) {
-	c.parent = parent
-	if c.Opts == nil {
-		c.Opts = c.parent.Opts
-	}
-	c.gfs, err = parent.combinedFlags()
-	if err != nil {
-		return err
-	}
+func (c *Command) setParent(parent *Command) error {
+	c.parent, c.Opts = parent, parent.Opts
 	return nil
 }
 
-// combinedFlags returns a pflag.FlagSet containing both local and global flags for the command.
-func (c *Command) combinedFlags() (*pflag.FlagSet, error) {
-	if c.gfs == nil {
-		return c.fs, nil
+// newFS returns a new pflag.FlagSet with the provided flags.
+func newFS(flags []Flag) *pflag.FlagSet {
+	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
+	for _, f := range flags {
+		f.Apply(fs)
 	}
-
-	var redefined []string
-	c.gfs.VisitAll(func(f *pflag.Flag) {
-		if c.fs.Lookup(f.Name) != nil || c.fs.ShorthandLookup(f.Shorthand) != nil {
-			redefined = append(redefined, f.Name)
-			return
-		}
-		c.fs.AddFlag(f)
-	})
-	if len(redefined) > 0 {
-		return nil, &ErrMisconfigured{cmd: c, msg: fmt.Sprintf("global flags redefined locally: %v", redefined)}
-	}
-	return c.fs, nil
+	fs.Usage = func() {}
+	return fs
 }
 
 // isUnknownFlagErr returns true if the given pflag.Parse error is due to an unknown flag or shorthand.
@@ -236,7 +227,12 @@ func isUnknownFlagErr(e error) bool {
 // -h or --help is specified by the user. It is the default value for UsageFunc in Options.
 func defaultUsageFunc(c *Command) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Usage: %s\n", c.usage())
+
+	if c.Help != "" {
+		fmt.Fprint(&b, c.Help, "\n\n")
+	}
+
+	fmt.Fprintf(&b, "Usage:\n  %s\n", c.usage())
 
 	if len(c.Subcommands) > 0 {
 		fmt.Fprint(&b, "\nAvailable Commands:\n")
@@ -247,12 +243,12 @@ func defaultUsageFunc(c *Command) string {
 		tw.Flush()
 	}
 
-	if c.fs.HasAvailableFlags() {
-		fmt.Fprintf(&b, "\nFlags:\n%s", c.fs.FlagUsages())
+	if flags := c.LocalFlags(); len(flags) > 0 {
+		fmt.Fprintf(&b, "\nFlags:\n%s", newFS(flags).FlagUsages())
 	}
 
-	if c.gfs != nil && c.gfs.HasAvailableFlags() {
-		fmt.Fprintf(&b, "\nGlobal Flags:\n%s", c.gfs.FlagUsages())
+	if flags := c.GlobalFlags(); len(flags) > 0 {
+		fmt.Fprintf(&b, "\nGlobal Flags:\n%s", newFS(flags).FlagUsages())
 	}
 
 	return b.String()
