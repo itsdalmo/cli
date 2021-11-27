@@ -67,11 +67,10 @@ type Command struct {
 
 	fs     *pflag.FlagSet
 	parent *Command
-	parsed *Command
 }
 
-// Setup ...
-func (c *Command) Setup() (err error) {
+// initialize ...
+func (c *Command) initialize() (err error) {
 	if c.Usage == "" {
 		return &ErrMisconfigured{cmd: c, msg: "usage must be defined"}
 	}
@@ -81,6 +80,7 @@ func (c *Command) Setup() (err error) {
 	if c.Exec != nil && len(c.Subcommands) > 0 {
 		return &ErrMisconfigured{cmd: c, msg: "cannot define both exec and subcommands"}
 	}
+	// TODO: Ensure that options can only be set on the root command.
 	c.Opts.complete()
 
 	c.fs = newFS(c.LocalFlags())
@@ -116,12 +116,16 @@ func (c *Command) CombinedFlags() []Flag {
 	return fs
 }
 
-// Parse ...
-func (c *Command) Parse(args []string) (parseError error) {
-	if err := c.Setup(); err != nil {
-		return err
+// parse ...
+func (c *Command) parse(args []string) (*Command, error) {
+	if err := c.initialize(); err != nil {
+		return nil, err
 	}
-	var helpRequested bool
+	var (
+		parseError    error
+		unparsed      []string
+		helpRequested bool
+	)
 	if err := c.fs.Parse(args); err != nil {
 		switch {
 		case isUnknownFlagErr(err):
@@ -132,7 +136,7 @@ func (c *Command) Parse(args []string) (parseError error) {
 				failedArg := err.Error()[i:]
 				for ii, arg := range args {
 					if arg == failedArg {
-						args = args[ii:]
+						unparsed = args[ii:]
 						break
 					}
 				}
@@ -142,19 +146,27 @@ func (c *Command) Parse(args []string) (parseError error) {
 			// Wait with returning error until we have checked arguments to see if --help was specified for a subcommand.
 			parseError, helpRequested = err, true
 		default:
-			return err
+			return nil, err
 		}
 	}
 
 	if err := ResolveMissingFlags(c.fs, c.Flags, c.Opts.Resolvers...); err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(c.Subcommands) > 0 {
 		for _, subcommand := range c.Subcommands {
 			if subcommand.name() == c.fs.Arg(0) {
-				c.parsed = subcommand
-				return subcommand.Parse(args[1:])
+				args = append(c.fs.Args()[1:], unparsed...)
+
+				cmd, err := subcommand.parse(args)
+				if err != nil {
+					return cmd, err
+				}
+				if helpRequested {
+					return cmd, parseError
+				}
+				return cmd, nil
 			}
 		}
 		if !helpRequested {
@@ -162,20 +174,20 @@ func (c *Command) Parse(args []string) (parseError error) {
 		}
 	}
 
-	c.parsed = c
-	return parseError
+	return c, parseError
 }
 
 // Execute ...
 func (c *Command) Execute(args []string) error {
-	if err := c.Parse(args); err != nil {
+	cmd, err := c.parse(args)
+	if err != nil {
 		if errors.Is(err, pflag.ErrHelp) {
-			fmt.Fprintln(c.parsed.Opts.ErrWriter, c.parsed.Opts.UsageFunc(c.parsed))
+			fmt.Fprintln(cmd.Opts.ErrWriter, cmd.Opts.UsageFunc(cmd))
 			return nil
 		}
 		return fmt.Errorf("parsing command: %w", err)
 	}
-	return c.parsed.Exec(&Context{c.parsed.fs})
+	return cmd.Exec(&Context{cmd.fs})
 }
 
 // name returns the name of the command.
