@@ -188,6 +188,38 @@ func Test_Subcommands_IgnoresGlobalFlagOrder(t *testing.T) {
 	}
 }
 
+func Test_NestedSubcommands(t *testing.T) {
+	c := cli.Command{
+		Usage: "root [flags] [command]",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "debug, d",
+				Usage: "Enable debug logging",
+			},
+		},
+		Subcommands: []*cli.Command{
+			{
+				Usage: "nested",
+				Subcommands: []*cli.Command{
+					{
+						Usage: "subcommand",
+						Exec: func(c *cli.Context) error {
+							debug, err := c.GetBool("debug")
+							eq(t, nil, err)
+							eq(t, true, debug)
+							return nil
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := c.Execute([]string{"--debug", "nested", "subcommand"}); err != nil {
+		t.Errorf("execute error: %s", err)
+	}
+}
+
 func eq(t *testing.T, expected, got interface{}) {
 	t.Helper()
 	if !reflect.DeepEqual(got, expected) {
