@@ -1,3 +1,4 @@
+//go:build ignore
 // +build ignore
 
 package main
@@ -8,13 +9,7 @@ import (
 )
 
 func main() {
-	f, err := os.Create("flag_types.go")
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	err = flagTemplate.Execute(f, map[string]string{
+	types := map[string]string{
 		"Bool":          "bool",
 		"BoolSlice":     "[]bool",
 		"Duration":      "time.Duration",
@@ -23,7 +18,15 @@ func main() {
 		"IntSlice":      "[]int",
 		"String":        "string",
 		"StringSlice":   "[]string",
-	})
+	}
+
+	ft, err := os.Create("flag_types.go")
+	if err != nil {
+		panic(err)
+	}
+	defer ft.Close()
+
+	err = flagTemplate.Execute(ft, types)
 	if err != nil {
 		panic(err)
 	}
@@ -77,9 +80,26 @@ func (f *{{ $name }}Flag) GetEnvVar() []string {
 	return f.EnvVar
 }
 
+// GetValue implements Flag.
+func (f *{{ $name }}Flag) GetValue() interface{} {
+	return f.Value
+}
+
 // IsRequired implements Flag.
 func (f *{{ $name }}Flag) IsRequired() bool {
 	return f.Required
+}
+
+// {{ $name }} returns the {{ $type }} value of the flag with the specified name. 
+func (c *Context) {{ $name }}(name string) {{ $type }} {
+	value := c.lookup(name).GetValue()
+
+	v, ok := value.({{ $type }})
+	if !ok {
+		panic(typeMismatchErr(name, "{{ $type }}", value))
+	}
+
+	return v
 }
 {{ end -}}
 `))

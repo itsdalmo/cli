@@ -46,9 +46,26 @@ func (f *BoolFlag) GetEnvVar() []string {
 	return f.EnvVar
 }
 
+// GetValue implements Flag.
+func (f *BoolFlag) GetValue() interface{} {
+	return f.Value
+}
+
 // IsRequired implements Flag.
 func (f *BoolFlag) IsRequired() bool {
 	return f.Required
+}
+
+// Bool returns the bool value of the flag with the specified name.
+func (c *Context) Bool(name string) bool {
+	value := c.lookup(name).GetValue()
+
+	v, ok := value.(bool)
+	if !ok {
+		panic(typeMismatchErr(name, "bool", value))
+	}
+
+	return v
 }
 
 var _ Flag = &BoolSliceFlag{}
@@ -89,9 +106,26 @@ func (f *BoolSliceFlag) GetEnvVar() []string {
 	return f.EnvVar
 }
 
+// GetValue implements Flag.
+func (f *BoolSliceFlag) GetValue() interface{} {
+	return f.Value
+}
+
 // IsRequired implements Flag.
 func (f *BoolSliceFlag) IsRequired() bool {
 	return f.Required
+}
+
+// BoolSlice returns the []bool value of the flag with the specified name.
+func (c *Context) BoolSlice(name string) []bool {
+	value := c.lookup(name).GetValue()
+
+	v, ok := value.([]bool)
+	if !ok {
+		panic(typeMismatchErr(name, "[]bool", value))
+	}
+
+	return v
 }
 
 var _ Flag = &DurationFlag{}
@@ -132,9 +166,26 @@ func (f *DurationFlag) GetEnvVar() []string {
 	return f.EnvVar
 }
 
+// GetValue implements Flag.
+func (f *DurationFlag) GetValue() interface{} {
+	return f.Value
+}
+
 // IsRequired implements Flag.
 func (f *DurationFlag) IsRequired() bool {
 	return f.Required
+}
+
+// Duration returns the time.Duration value of the flag with the specified name.
+func (c *Context) Duration(name string) time.Duration {
+	value := c.lookup(name).GetValue()
+
+	v, ok := value.(time.Duration)
+	if !ok {
+		panic(typeMismatchErr(name, "time.Duration", value))
+	}
+
+	return v
 }
 
 var _ Flag = &DurationSliceFlag{}
@@ -175,9 +226,26 @@ func (f *DurationSliceFlag) GetEnvVar() []string {
 	return f.EnvVar
 }
 
+// GetValue implements Flag.
+func (f *DurationSliceFlag) GetValue() interface{} {
+	return f.Value
+}
+
 // IsRequired implements Flag.
 func (f *DurationSliceFlag) IsRequired() bool {
 	return f.Required
+}
+
+// DurationSlice returns the []time.Duration value of the flag with the specified name.
+func (c *Context) DurationSlice(name string) []time.Duration {
+	value := c.lookup(name).GetValue()
+
+	v, ok := value.([]time.Duration)
+	if !ok {
+		panic(typeMismatchErr(name, "[]time.Duration", value))
+	}
+
+	return v
 }
 
 var _ Flag = &IntFlag{}
@@ -218,9 +286,26 @@ func (f *IntFlag) GetEnvVar() []string {
 	return f.EnvVar
 }
 
+// GetValue implements Flag.
+func (f *IntFlag) GetValue() interface{} {
+	return f.Value
+}
+
 // IsRequired implements Flag.
 func (f *IntFlag) IsRequired() bool {
 	return f.Required
+}
+
+// Int returns the int value of the flag with the specified name.
+func (c *Context) Int(name string) int {
+	value := c.lookup(name).GetValue()
+
+	v, ok := value.(int)
+	if !ok {
+		panic(typeMismatchErr(name, "int", value))
+	}
+
+	return v
 }
 
 var _ Flag = &IntSliceFlag{}
@@ -261,9 +346,26 @@ func (f *IntSliceFlag) GetEnvVar() []string {
 	return f.EnvVar
 }
 
+// GetValue implements Flag.
+func (f *IntSliceFlag) GetValue() interface{} {
+	return f.Value
+}
+
 // IsRequired implements Flag.
 func (f *IntSliceFlag) IsRequired() bool {
 	return f.Required
+}
+
+// IntSlice returns the []int value of the flag with the specified name.
+func (c *Context) IntSlice(name string) []int {
+	value := c.lookup(name).GetValue()
+
+	v, ok := value.([]int)
+	if !ok {
+		panic(typeMismatchErr(name, "[]int", value))
+	}
+
+	return v
 }
 
 var _ Flag = &StringFlag{}
@@ -304,9 +406,26 @@ func (f *StringFlag) GetEnvVar() []string {
 	return f.EnvVar
 }
 
+// GetValue implements Flag.
+func (f *StringFlag) GetValue() interface{} {
+	return f.Value
+}
+
 // IsRequired implements Flag.
 func (f *StringFlag) IsRequired() bool {
 	return f.Required
+}
+
+// String returns the string value of the flag with the specified name.
+func (c *Context) String(name string) string {
+	value := c.lookup(name).GetValue()
+
+	v, ok := value.(string)
+	if !ok {
+		panic(typeMismatchErr(name, "string", value))
+	}
+
+	return v
 }
 
 var _ Flag = &StringSliceFlag{}
@@ -347,7 +466,24 @@ func (f *StringSliceFlag) GetEnvVar() []string {
 	return f.EnvVar
 }
 
+// GetValue implements Flag.
+func (f *StringSliceFlag) GetValue() interface{} {
+	return f.Value
+}
+
 // IsRequired implements Flag.
 func (f *StringSliceFlag) IsRequired() bool {
 	return f.Required
+}
+
+// StringSlice returns the []string value of the flag with the specified name.
+func (c *Context) StringSlice(name string) []string {
+	value := c.lookup(name).GetValue()
+
+	v, ok := value.([]string)
+	if !ok {
+		panic(typeMismatchErr(name, "[]string", value))
+	}
+
+	return v
 }

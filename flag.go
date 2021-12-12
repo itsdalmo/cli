@@ -28,6 +28,9 @@ type Flag interface {
 	// GetEnvVar returns the env variables used to set this flag.
 	GetEnvVar() []string
 
+	// GetValue returns the value of the flag.
+	GetValue() interface{}
+
 	// IsRequired returns true if the flag is marked as required.
 	IsRequired() bool
 }

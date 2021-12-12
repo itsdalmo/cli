@@ -50,11 +50,7 @@ func echo(c *cli.Context) error {
 }
 
 func repeat(c *cli.Context) error {
-	times, err := c.GetInt("times")
-	if err != nil {
-		return err
-	}
-	for i := 0; i < times; i++ {
+	for i := 0; i < c.Int("times"); i++ {
 		fmt.Println(c.Arg(0))
 	}
 	return nil

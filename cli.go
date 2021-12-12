@@ -23,11 +23,6 @@ func (e *ErrMisconfigured) Error() string {
 	return fmt.Sprintf("misconfigured command %q: %s", e.cmd.name(), e.msg)
 }
 
-// Context ...
-type Context struct {
-	*pflag.FlagSet
-}
-
 // Options ...
 type Options struct {
 	Reader    io.Reader
@@ -85,6 +80,8 @@ func (c *Command) initialize() (err error) {
 
 	c.fs = newFS(c.LocalFlags())
 	if c.parent != nil {
+		// TODO: Ensure that subcommands cannot redefine a global flag. Then
+		// get rid of this line.
 		c.fs.AddFlagSet(c.parent.fs)
 	}
 
@@ -187,7 +184,14 @@ func (c *Command) Execute(args []string) error {
 		}
 		return fmt.Errorf("parsing command: %w", err)
 	}
-	return cmd.Exec(&Context{cmd.fs})
+
+	ctx := &Context{args: cmd.fs.Args(), flags: make(map[string]Flag)}
+
+	for _, f := range cmd.CombinedFlags() {
+		ctx.flags[f.GetName()] = f
+	}
+
+	return cmd.Exec(ctx)
 }
 
 // name returns the name of the command.

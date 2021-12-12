@@ -68,16 +68,9 @@ func TestFlagParsing(t *testing.T) {
 					},
 				},
 				Exec: func(c *cli.Context) error {
-					region, err := c.GetString("region")
-					if err != nil {
-						t.Fatalf("unexpected error: %s", err)
-					}
-					eq(t, tc.expectedRegion, region)
+					eq(t, tc.expectedRegion, c.String("region"))
 
-					instances, err := c.GetStringSlice("instance")
-					if err != nil {
-						t.Fatalf("unexpected error: %s", err)
-					}
+					instances := c.StringSlice("instance")
 					for i, expected := range tc.expectedInstances {
 						eq(t, expected, instances[i])
 					}

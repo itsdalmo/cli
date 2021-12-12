@@ -38,11 +38,7 @@ func Example_basic() {
 			},
 		},
 		Exec: func(c *cli.Context) error {
-			debug, err := c.GetBool("debug")
-			if err != nil {
-				return err
-			}
-			if debug {
+			if c.Bool("debug") {
 				fmt.Println("debugging is enabled")
 			}
 			return nil
@@ -98,13 +94,8 @@ func Example_subcommands() {
 					},
 				},
 				Exec: func(c *cli.Context) error {
-					times, err := c.GetInt("times")
-					if err != nil {
-						return err
-					}
-					delimiter, err := c.GetString("delimiter")
-					for i := 0; i < times; i++ {
-						fmt.Print(c.Arg(0), delimiter)
+					for i := 0; i < c.Int("times"); i++ {
+						fmt.Print(c.Arg(0), c.String("delimiter"))
 					}
 					return nil
 				},
@@ -146,9 +137,7 @@ func Test_Subcommands_InheritGlobalFlags(t *testing.T) {
 			{
 				Usage: "subcommand [flags]",
 				Exec: func(c *cli.Context) error {
-					debug, err := c.GetBool("debug")
-					eq(t, nil, err)
-					eq(t, true, debug)
+					eq(t, true, c.Bool("debug"))
 					eq(t, 0, len(c.Args()))
 					return nil
 				},
@@ -174,9 +163,7 @@ func Test_Subcommands_IgnoresGlobalFlagOrder(t *testing.T) {
 			{
 				Usage: "subcommand [flags]",
 				Exec: func(c *cli.Context) error {
-					debug, err := c.GetBool("debug")
-					eq(t, nil, err)
-					eq(t, true, debug)
+					eq(t, true, c.Bool("debug"))
 					return nil
 				},
 			},
@@ -204,9 +191,7 @@ func Test_NestedSubcommands(t *testing.T) {
 					{
 						Usage: "subcommand",
 						Exec: func(c *cli.Context) error {
-							debug, err := c.GetBool("debug")
-							eq(t, nil, err)
-							eq(t, true, debug)
+							eq(t, true, c.Bool("debug"))
 							return nil
 						},
 					},
