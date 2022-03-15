@@ -224,21 +224,6 @@ func (c *Command) setParent(parent *Command) error {
 	return nil
 }
 
-// newFS returns a new pflag.FlagSet with the provided flags.
-func newFS(flags []Flag) *pflag.FlagSet {
-	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
-	for _, f := range flags {
-		f.Apply(fs)
-	}
-	fs.Usage = func() {}
-	return fs
-}
-
-// isUnknownFlagErr returns true if the given pflag.Parse error is due to an unknown flag or shorthand.
-func isUnknownFlagErr(e error) bool {
-	return strings.HasPrefix(e.Error(), "unknown flag") || strings.HasPrefix(e.Error(), "unknown shorthand flag")
-}
-
 // defaultUsageFunc is the default function used to produce the usage string that is printed when
 // -h or --help is specified by the user. It is the default value for UsageFunc in Options.
 func defaultUsageFunc(c *Command) string {
